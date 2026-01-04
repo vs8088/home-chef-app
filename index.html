@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>港式智能餐單</title>
+    <style>
+        :root {
+            --primary: #00897b; /* 港式碧綠 */
+            --primary-light: #e0f2f1;
+            --primary-dark: #005b4f;
+            --accent: #ff6f00; /* 燒臘橙 */
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --text-light: #666666;
+            --danger: #d32f2f;
+            --shadow: 0 4px 12px rgba(0,0,0,0.08);
+            --radius: 16px;
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            margin: 0; 
+            padding-bottom: calc(80px + var(--safe-area-bottom)); 
+            overscroll-behavior-y: none;
+        }
+
+        /* Header */
+        header { 
+            background: var(--card-bg); 
+            padding: 15px 20px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+            position: sticky; 
+            top: 0; 
+            z-index: 100; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        h1 { margin: 0; font-size: 1.3rem; color: var(--primary); font-weight: 800; letter-spacing: -0.5px; }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #eee;
+            color: #666;
+            font-weight: 600;
+        }
+        .status-badge.active { background: var(--primary-light); color: var(--primary-dark); }
+
+        /* Navigation */
+        nav { 
+            position: fixed; 
+            bottom: 0; 
+            width: 100%; 
+            background: rgba(255,255,255,0.95); 
+            backdrop-filter: blur(10px);
+            display: flex; 
+            justify-content: space-around; 
+            padding: 10px 0 calc(10px + var(--safe-area-bottom)) 0; 
+            border-top: 1px solid #eee; 
+            z-index: 1000; 
+        }
+        nav button { 
+            background: none; 
+            border: none; 
+            font-size: 0.7rem; 
+            color: #999; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            gap: 4px; 
+            cursor: pointer; 
+            width: 33%;
+            transition: color 0.2s;
+        }
+        nav button.active { color: var(--primary); font-weight: 600; }
+        nav button svg { width: 24px; height: 24px; fill: currentColor; }
+
+        /* Views */
+        .view { display: none; padding: 20px; max-width: 600px; margin: 0 auto; animation: fadeIn 0.3s ease; }
+        .view.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Cards */
+        .card { 
+            background: var(--card-bg); 
+            border-radius: var(--radius); 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            box-shadow: var(--shadow); 
+            position: relative; 
+            overflow: hidden;
+        }
+        
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .day-tag { 
+            background: var(--primary); 
+            color: white; 
+            padding: 6px 14px; 
+            border-radius: 20px; 
+            font-size: 0.9rem; 
+            font-weight: bold; 
+            box-shadow: 0 2px 4px rgba(0,137,123,0.3);
+        }
+
+        /* Meal Sections */
+        .meal-row {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .meal-time {
+            width: 50px;
+            font-size: 0.8rem;
+            color: var(--text-light);
+            font-weight: 600;
+            padding-top: 4px;
+        }
+        .meal-content {
+            flex: 1;
+            background: #f9f9f9;
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .meal-content.dinner {
+            background: #fff8e1; /* 暖色背景給晚餐 */
+            border: 1px solid #ffe0b2;
+        }
+        
+        .dish-name { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; color: var(--text); }
+        .dish-desc { font-size: 0.85rem; color: var(--text-light); line-height: 1.4; }
+        
+        .tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; background: #eee; color: #666; }
+        .tag.light { background: #e8f5e9; color: #2e7d32; }
+        .tag.prep { background: #e3f2fd; color: #1565c0; }
+
+        /* Actions */
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .regen-btn {
+            background: none;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        /* New AI Feature Buttons */
+        .sparkle-btn {
+            background: linear-gradient(135deg, #7b1fa2, #4a148c);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 2px 4px rgba(123, 31, 162, 0.3);
+            transition: transform 0.2s;
+        }
+        .sparkle-btn:hover { transform: translateY(-1px); }
+        .sparkle-btn.secondary {
+             background: white;
+             border: 1px solid #7b1fa2;
+             color: #7b1fa2;
+             box-shadow: none;
+        }
+        
+        .feedback-btns { display: flex; gap: 8px; margin-left: auto;}
+        .feedback-btn {
+            background: white;
+            border: 1px solid #ddd;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+        }
+        .feedback-btn.active.like { background: var(--primary-light); border-color: var(--primary); color: var(--primary); transform: scale(1.1); }
+        .feedback-btn.active.dislike { background: #ffebee; border-color: var(--danger); color: var(--danger); transform: scale(1.1); }
+
+        /* Forms & Inputs */
+        .input-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem; color: var(--primary-dark); }
+        input[type="text"], input[type="password"], input[type="number"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px; /* 防止 iOS zoom */
+            transition: border 0.3s;
+            background: #fff;
+        }
+        input:focus, textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px var(--primary-light); }
+        textarea { height: 100px; resize: none; font-family: inherit; }
+
+        /* Main Button */
+        .btn-main {
+            width: 100%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,137,123,0.3);
+            transition: transform 0.1s;
+        }
+        .btn-main:active { transform: scale(0.98); }
+        .btn-main:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-light);
+            border: 1px solid #ddd;
+            margin-top: 10px;
+        }
+        .btn-outlined {
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            margin-top: 10px;
+            box-shadow: none;
+        }
+        
+        /* Data Transfer Buttons */
+        .data-transfer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .btn-small {
+            padding: 10px;
+            font-size: 0.9rem;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            background: #fff;
+            color: #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        /* Loading */
+        .loader-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Shopping List */
+        .shop-cat { margin-top: 20px; }
+        .shop-cat-title { 
+            font-weight: 700; 
+            color: var(--primary-dark); 
+            border-bottom: 2px solid var(--primary-light); 
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .shop-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.95rem;
+        }
+        .shop-item input { width: 20px; height: 20px; margin-right: 12px; accent-color: var(--primary); }
+        .shop-item.checked span { text-decoration: line-through; color: #aaa; }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-body h3 { color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 8px; margin-top: 20px; }
+        .modal-body ul, .modal-body ol { padding-left: 20px; }
+        .modal-body li { margin-bottom: 6px; line-height: 1.5; }
+
+        .analysis-btn-container { margin-bottom: 20px; text-align: center; }
+
+        /* Welcome Popup Specifics */
+        .welcome-icon { font-size: 48px; margin-bottom: 15px; display: block; text-align: center; }
+        .welcome-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .welcome-actions button { flex: 1; }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🍲 港式智能餐單</h1>
+    <div id="statusBadge" class="status-badge">API 未設定</div>
+</header>
+
+<!-- 1. 餐單頁面 -->
+<div id="view-plan" class="view active">
+    
+    <!-- Loading State -->
+    <div id="loading" class="loader-container">
+        <div class="spinner"></div>
+        <h3 style="color: var(--primary);">AI 大廚正在思考中...</h3>
+        <p style="color: #666; font-size: 0.9rem;">正在根據你的喜好、營養均衡和街市食材進行規劃。</p>
+    </div>
+
+    <!-- Plan Content -->
+    <div id="plan-container">
+        <div class="analysis-btn-container">
+             <button onclick="getNutritionReport()" class="sparkle-btn" style="font-size: 0.9rem; padding: 8px 16px; margin: 0 auto;">
+                ✨ 分析本週營養均衡度
+            </button>
+        </div>
+        <div id="plan-list"></div>
+    </div>
+</div>
+
+<!-- 2. 購物清單頁面 -->
+<div id="view-shop" class="view">
+    <div class="card">
+        <h2 style="margin-top:0;">🛒 每週購物清單</h2>
+        <div id="shopping-list-content">
+            <p style="color: #999; text-align: center; padding: 20px;">暫無資料，請先生成餐單。</p>
+        </div>
+    </div>
+</div>
+
+<!-- 3. 設定頁面 -->
+<div id="view-settings" class="view">
+    <div class="card">
+        <h2 style="margin-top:0;">⚙️ 系統設定</h2>
+        
+        <div class="input-group">
+            <label>Google Gemini API Key (必填)</label>
+            <input type="password" id="apiKey" placeholder="貼上你的 API Key" onchange="saveSettings()">
+            <small style="display:block; color:#888; margin-top:6px; font-size:0.8rem;">
+                Key 僅儲存於你的瀏覽器，不會上傳。
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary);">免費獲取 Key</a>
+            </small>
+        </div>
+
+        <!-- Data Transfer Section -->
+        <label>💾 資料備份與轉移</label>
+        <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">切換裝置時，請先「匯出」並複製代碼，再到新裝置「匯入」。</p>
+        <div class="data-transfer-grid">
+            <button class="btn-small" onclick="exportData()">
+                ⬆️ 匯出資料
+            </button>
+            <button class="btn-small" onclick="openImportModal()">
+                ⬇️ 匯入資料
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>🏠 預設偏好 (Prompt)</h3>
+        <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">這裡的文字會告訴 AI 你的詳細要求。</p>
+        
+        <div class="input-group">
+            <label>餐單提示詞</label>
+            <textarea id="promptInput" onchange="saveSettings()"></textarea>
+        </div>
+
+        <button onclick="generatePlan()" class="btn-main">✨ 生成 7 天餐單</button>
+        <button onclick="clearData()" class="btn-main btn-ghost">清除所有資料</button>
+    </div>
+    
+    <div class="card">
+        <h3>❤️ AI 記憶庫</h3>
+        <p style="font-size:0.8rem; color:#666;">系統會記住你點過讚或不喜歡的菜式。</p>
+        <div style="font-size: 0.85rem;" id="pref-display"></div>
+    </div>
+</div>
+
+<!-- Info Modal (Recipe/Nutrition) -->
+<div id="info-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('info-modal')">&times;</span>
+        <h2 id="modal-title" style="margin-top:0; font-size:1.4rem; color:var(--primary-dark);"></h2>
+        <div id="modal-body" class="modal-body"></div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="import-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('import-modal')">&times;</span>
+        <h2 style="margin-top:0; font-size:1.4rem; color:var(--primary-dark);">匯入資料</h2>
+        <p style="font-size:0.9rem; color:#666;">請將舊裝置匯出的代碼貼在下方：</p>
+        <textarea id="import-text" style="height:150px; font-family:monospace; font-size:0.8rem;" placeholder='{"apiKey": "...", "plan": ...}'></textarea>
+        <button onclick="importData()" class="btn-main" style="margin-top:10px;">確認匯入</button>
+    </div>
+</div>
+
+<!-- Welcome Modal (Startup) -->
+<div id="welcome-modal" class="modal">
+    <div class="modal-content" style="text-align: center;">
+        <span class="welcome-icon">👋</span>
+        <h2 style="margin-top:0; color:var(--primary);">歡迎使用智能廚房</h2>
+        <p style="color:#666; line-height:1.6; margin-bottom:20px;">
+            我們已為你準備了一份預設的「港式家常餐單」。<br>
+            你可以直接開始瀏覽，或者前往設定輸入 API Key 來讓 AI 為你度身訂造。
+        </p>
+        <div class="welcome-actions">
+            <button onclick="closeModal('welcome-modal')" class="btn-main btn-outlined">開始使用</button>
+            <button onclick="closeModal('welcome-modal'); switchTab('settings');" class="btn-main">前往設定</button>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation -->
+<nav>
+    <button onclick="switchTab('plan')" id="nav-plan" class="active">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+        餐單
+    </button>
+    <button onclick="switchTab('shop')" id="nav-shop">
+        <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        買餸
+    </button>
+    <button onclick="switchTab('settings')" id="nav-settings">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.04.24.24.41.48.41h3.84c.24 0 .43-.17.47-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        設定
+    </button>
+</nav>
+
+<script>
+    // --- APP LOGIC ---
+
+    const DEFAULT_PROMPT = `角色：你係一位識煮餸又好有條理嘅港式家常菜餐單設計師。
+任務：設計一個「7天、3人份」嘅中式／港式晚餐餐單。
+背景限制：
+1. 風格：港式家常，食材以香港街市易買為主。
+2. 健康：7天中有 4天要偏清淡養生（蒸/湯/少油），其餘 3天 正常家常。
+3. 禁忌：7天內最多只可出現 1次蝦或蟹。主要蛋白不要重複超過2次。
+4. 廚具：水波爐（可蒸可焗）、明火炒鑊、平底鑊。
+5. 備餐：安排 1-2 晚使用「剩餸」做變化（如炒飯）。
+輸出格式：必須是純 JSON，不要用 markdown code block。
+結構範例：
+{
+  "days": [
+    {
+      "day": 1,
+      "meals": {
+        "breakfast": "簡單描述",
+        "lunch": "簡單描述",
+        "dinner": {
+           "main": "主菜名",
+           "side": "副菜名",
+           "soup": "湯水",
+           "staple": "主食",
+           "is_light": true,
+           "method": "簡述做法與廚具",
+           "prep": "需預先準備的步驟"
+        }
+      }
+    }
+  ],
+  "shopping_list": {
+     "proteins": ["項目"],
+     "veggies": ["項目"],
+     "others": ["項目"]
+  }
+}`;
+
+    // Dummy Data for immediate start
+    const DEFAULT_PLAN = {
+        "days": [
+            { "day": 1, "meals": { "breakfast": "腿蛋治 + 咖啡", "lunch": "雲吞麵 (外賣/自煮)", "dinner": { "main": "清蒸海上鮮 (蒸魚)", "side": "蒜蓉炒菜心", "soup": "粟米紅蘿蔔豬骨湯", "staple": "白飯", "is_light": true, "method": "魚洗淨擦乾，水滾蒸8分鐘，淋熟油豉油。", "prep": "早上解凍豬骨" } } },
+            { "day": 2, "meals": { "breakfast": "皮蛋瘦肉粥", "lunch": "煎餃 + 菜", "dinner": { "main": "冬菇滑雞", "side": "清炒西蘭花", "soup": "昨晚湯水", "staple": "白飯", "is_light": true, "method": "雞醃30分鐘，隔水蒸15分鐘。", "prep": "冬菇浸軟" } } },
+            { "day": 3, "meals": { "breakfast": "腸粉 + 燒賣", "lunch": "揚州炒飯 (用昨晚冷飯)", "dinner": { "main": "洋蔥豬扒", "side": "魚香茄子", "soup": "番茄豆腐湯", "staple": "白飯", "is_light": false, "method": "豬扒煎香兩面，回鑊炒洋蔥汁。", "prep": "豬扒拍鬆醃味" } } },
+            { "day": 4, "meals": { "breakfast": "麥皮 + 水煮蛋", "lunch": "湯烏冬", "dinner": { "main": "勝瓜蒸肉碎", "side": "瑤柱蒸蛋", "soup": "紫菜蛋花湯", "staple": "糙米飯", "is_light": true, "method": "肉碎鋪勝瓜面蒸10分鐘。", "prep": "瑤柱浸軟" } } },
+            { "day": 5, "meals": { "breakfast": "火腿通粉", "lunch": "肉醬意粉", "dinner": { "main": "西芹炒雞柳", "side": "蝦仁炒蛋", "soup": "合掌瓜瘦肉湯", "staple": "白飯", "is_light": false, "method": "雞柳快炒保持嫩滑。", "prep": "蝦仁去腸" } } },
+            { "day": 6, "meals": { "breakfast": "餐蛋麵", "lunch": "簡單三文治", "dinner": { "main": "梅菜蒸鯇魚", "side": "上湯浸菠菜", "soup": "青紅蘿蔔豬腱湯", "staple": "白飯", "is_light": true, "method": "梅菜洗淨鋪魚面蒸。", "prep": "豬腱汆水" } } },
+            { "day": 7, "meals": { "breakfast": "去茶樓飲茶", "lunch": "飲茶點心", "dinner": { "main": "豉汁蒸排骨", "side": "老少平安 (豆腐鯪魚肉)", "soup": "昨晚湯水", "staple": "白飯", "is_light": false, "method": "排骨豆豉撈勻蒸15分鐘。", "prep": "排骨醃入味" } } }
+        ],
+        "shopping_list": {
+            "proteins": ["魚 (2條)", "雞 (半隻)", "豬扒 (3塊)", "免治豬肉 (300g)", "蝦仁 (200g)", "排骨 (300g)", "鯪魚肉 (150g)"],
+            "veggies": ["菜心", "西蘭花", "洋蔥", "茄子", "番茄", "勝瓜", "西芹", "菠菜", "青紅蘿蔔", "合掌瓜"],
+            "others": ["皮蛋", "冬菇", "瑤柱", "紫菜", "梅菜", "豆腐"]
+        }
+    };
+
+    // State
+    const state = {
+        apiKey: '',
+        prompt: DEFAULT_PROMPT,
+        plan: null,
+        prefs: { liked: [], disliked: [] }
+    };
+
+    // --- INIT ---
+    window.onload = () => {
+        loadState();
+        renderPrefs();
+        
+        // 1. 如果沒有儲存的餐單，載入預設餐單
+        if (!state.plan) {
+            state.plan = DEFAULT_PLAN;
+            // 不存入 LocalStorage，只作為臨時顯示，直到用戶生成新的
+        }
+
+        renderPlan();
+
+        // 2. 如果沒有 API Key，彈出歡迎 Modal
+        if (!state.apiKey) {
+            document.getElementById('welcome-modal').classList.add('active');
+        }
+        
+        document.getElementById('shopping-list-content').addEventListener('change', (e) => {
+            if(e.target.type === 'checkbox') {
+                e.target.parentElement.classList.toggle('checked', e.target.checked);
+            }
+        });
+    };
+
+    function loadState() {
+        state.apiKey = localStorage.getItem('hkchef_key') || '';
+        state.prompt = localStorage.getItem('hkchef_prompt') || DEFAULT_PROMPT;
+        const savedPlan = localStorage.getItem('hkchef_plan');
+        if (savedPlan) state.plan = JSON.parse(savedPlan);
+        const savedPrefs = localStorage.getItem('hkchef_prefs');
+        if (savedPrefs) state.prefs = JSON.parse(savedPrefs);
+
+        document.getElementById('apiKey').value = state.apiKey;
+        document.getElementById('promptInput').value = state.prompt;
+        updateStatus();
+    }
+
+    function saveSettings() {
+        state.apiKey = document.getElementById('apiKey').value.trim();
+        state.prompt = document.getElementById('promptInput').value.trim();
+        localStorage.setItem('hkchef_key', state.apiKey);
+        localStorage.setItem('hkchef_prompt', state.prompt);
+        updateStatus();
+    }
+    
+    function updateStatus() {
+        const badge = document.getElementById('statusBadge');
+        if (state.apiKey) {
+            badge.textContent = 'API Ready';
+            badge.classList.add('active');
+        } else {
+            badge.textContent = 'API 未設定';
+            badge.classList.remove('active');
+        }
+    }
+
+    function clearData() {
+        if(confirm('確定要清除所有資料（包括 API Key、餐單、喜好）？')) {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+
+    // --- DATA EXPORT/IMPORT ---
+    
+    function exportData() {
+        const data = {
+            apiKey: state.apiKey,
+            prompt: state.prompt,
+            plan: state.plan,
+            prefs: state.prefs,
+            timestamp: new Date().toISOString()
+        };
+        const jsonStr = JSON.stringify(data);
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(jsonStr).then(() => {
+            alert('✅ 資料已複製！\n請將這些文字傳送到新裝置，然後使用「匯入資料」功能。');
+        }).catch(err => {
+            console.error(err);
+            prompt('無法自動複製，請手動複製以下代碼：', jsonStr);
+        });
+    }
+
+    function openImportModal() {
+        openModal('import-modal');
+        document.getElementById('import-text').value = '';
+    }
+
+    function importData() {
+        const txt = document.getElementById('import-text').value.trim();
+        if (!txt) return;
+
+        try {
+            const data = JSON.parse(txt);
+            
+            // Validate minimal structure
+            if (!data.prefs) throw new Error('Invalid Data');
+
+            // Save to LocalStorage
+            if (data.apiKey) localStorage.setItem('hkchef_key', data.apiKey);
+            if (data.prompt) localStorage.setItem('hkchef_prompt', data.prompt);
+            if (data.plan) localStorage.setItem('hkchef_plan', JSON.stringify(data.plan));
+            if (data.prefs) localStorage.setItem('hkchef_prefs', JSON.stringify(data.prefs));
+
+            alert('🎉 匯入成功！頁面將重新載入。');
+            location.reload();
+
+        } catch (e) {
+            alert('❌ 匯入失敗：資料格式錯誤。請確保複製了完整的 JSON 代碼。');
+        }
+    }
+
+    // --- AI GENERATION ---
+
+    async function generatePlan() {
+        if (!state.apiKey) {
+            alert('請先輸入 API Key！');
+            switchTab('settings');
+            return;
+        }
+
+        switchTab('plan');
+        document.getElementById('plan-container').style.display = 'none';
+        document.getElementById('plan-list').innerHTML = '';
+        document.getElementById('loading').style.display = 'flex';
+
+        let finalPrompt = state.prompt;
+        if (state.prefs.liked.length > 0) {
+            finalPrompt += `\n\n[用戶喜好] 請適量安排用戶喜歡的菜式：${state.prefs.liked.join(', ')}。`;
+        }
+        if (state.prefs.disliked.length > 0) {
+            finalPrompt += `\n\n[用戶討厭] 請絕對避開以下菜式：${state.prefs.disliked.join(', ')}。`;
+        }
+        finalPrompt += `\n\n[重要] 請只回傳 JSON 格式字串，不要包含 \`\`\`json 標記。`;
+
+        try {
+            const result = await callGemini(finalPrompt);
+            const json = cleanAndParseJSON(result);
+            state.plan = json;
+            localStorage.setItem('hkchef_plan', JSON.stringify(json));
+            renderPlan();
+        } catch (e) {
+            alert('生成失敗：' + e.message);
+            // 恢復顯示舊餐單 (如果有的話)
+            if(state.plan) renderPlan();
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    async function regenerateMeal(dayIndex, type) {
+        if (!state.apiKey) {
+            alert('請先在設定輸入 API Key 才能使用 AI 功能！');
+            switchTab('settings');
+            return;
+        }
+        if(!confirm('確定要 AI 重新建議這一餐嗎？')) return;
+        
+        const btn = document.getElementById(`regen-${dayIndex}-${type}`);
+        btn.textContent = '...';
+        btn.disabled = true;
+
+        const currentDinner = state.plan.days[dayIndex].meals.dinner;
+        let context = `請為第 ${dayIndex+1} 天的 ${type === 'dinner' ? '晚餐' : type} 重新建議一個菜式。`;
+        
+        if (type === 'dinner') {
+             context += `
+             原來的晚餐是：${currentDinner.main}。用戶想換一個。
+             要求：港式家常，包括主菜、副菜、湯、主食。
+             避開：${state.prefs.disliked.join(', ')}。
+             回傳格式：只回傳該餐的 JSON 對象 (不要 Markdown):
+             { "main": "...", "side": "...", "soup": "...", "staple": "...", "is_light": true/false, "method": "...", "prep": "..." }
+             `;
+        } else {
+             context += `要求簡單快捷。只回傳字串描述即可。`;
+        }
+
+        try {
+            const result = await callGemini(context);
+            
+            if (type === 'dinner') {
+                const newMeal = cleanAndParseJSON(result);
+                state.plan.days[dayIndex].meals.dinner = newMeal;
+            } else {
+                state.plan.days[dayIndex].meals[type] = result.replace(/"/g, ''); 
+            }
+            
+            localStorage.setItem('hkchef_plan', JSON.stringify(state.plan));
+            renderPlan();
+        } catch (e) {
+            alert('重試失敗');
+            btn.textContent = '重試';
+            btn.disabled = false;
+        }
+    }
+
+    // --- NEW AI FEATURES ---
+
+    async function getSmartRecipe(dishName) {
+        if (!state.apiKey) {
+            alert('請先在設定輸入 API Key 才能使用 AI 功能！');
+            switchTab('settings');
+            return;
+        }
+        openModal('info-modal', '👨‍🍳 智能大廚編寫中...', '<div class="spinner" style="margin:40px auto"></div><p style="text-align:center">AI 正在計算三人份量及步驟...</p>');
+        
+        const prompt = `你是一位有 20 年經驗的香港粵菜大廚。
+        任務：請教我煮「${dishName}」。
+        
+        請用 HTML 格式 (使用 h3, ul, ol, li, strong 標籤) 輸出詳細食譜，包括：
+        1. <h3>材料（3人份）</h3>：精確到克/湯匙，包括去街市買餸的貼士。
+        2. <h3>醃料/調味</h3>
+        3. <h3>烹飪步驟</h3>：一步步教，包括火候控制。
+        4. <h3>大廚秘訣</h3>：如何令這道菜更好吃的關鍵貼士。
+        
+        請不要用 Markdown 格式，直接給 HTML 片段。繁體中文。`;
+
+        try {
+            const html = await callGemini(prompt);
+            // Simple cleanup if gemini adds markdown
+            const cleanHtml = html.replace(/```html/g, '').replace(/```/g, '');
+            openModal('info-modal', '📖 ' + dishName, cleanHtml);
+        } catch (e) {
+            openModal('info-modal', '錯誤', '無法生成食譜，請稍後再試。');
+        }
+    }
+
+    async function getNutritionReport() {
+        if (!state.apiKey) {
+            alert('請先在設定輸入 API Key 才能使用 AI 功能！');
+            switchTab('settings');
+            return;
+        }
+        if(!state.plan) return;
+        openModal('info-modal', '📊 營養師分析中...', '<div class="spinner" style="margin:40px auto"></div><p style="text-align:center">正在分析 7 天餐單的營養均衡度...</p>');
+
+        const dinners = state.plan.days.map(d => `Day ${d.day}: ${d.meals.dinner.main} + ${d.meals.dinner.side} (湯: ${d.meals.dinner.soup})`).join('\n');
+        
+        const prompt = `你是一位專業的註冊營養師。請分析以下這份 7 天港式晚餐餐單：
+        ${dinners}
+        
+        請用 HTML 格式 (使用 h3, p, ul, li) 提供一份簡短報告：
+        1. <h3>整體評分</h3> (1-10分) 及短評。
+        2. <h3>優點</h3>：例如蛋白質足夠？蔬菜多？
+        3. <h3>改善建議</h3>：例如哪幾天鈉含量可能太高？纖維是否足夠？有什麼簡單建議？
+        
+        請語氣親切專業，繁體中文。不要 Markdown。`;
+
+        try {
+            const html = await callGemini(prompt);
+            const cleanHtml = html.replace(/```html/g, '').replace(/```/g, '');
+            openModal('info-modal', '📊 本週營養分析報告', cleanHtml);
+        } catch (e) {
+            openModal('info-modal', '錯誤', '分析失敗。');
+        }
+    }
+
+    async function callGemini(promptText) {
+        // Updated to the latest supported model gemini-2.5-flash-preview-09-2025
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${state.apiKey}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || 'API Error');
+        return data.candidates[0].content.parts[0].text;
+    }
+
+    function cleanAndParseJSON(text) {
+        let clean = text.replace(/```json/g, '').replace(/```/g, '');
+        const start = clean.indexOf('{');
+        const end = clean.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+            clean = clean.substring(start, end + 1);
+        }
+        return JSON.parse(clean);
+    }
+
+    // --- UI RENDERING ---
+
+    function renderPlan() {
+        document.getElementById('plan-container').style.display = 'block';
+        const container = document.getElementById('plan-list');
+        container.innerHTML = '';
+        if (!state.plan || !state.plan.days) return;
+
+        state.plan.days.forEach((day, idx) => {
+            const d = day.meals.dinner;
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="day-header">
+                    <span class="day-tag">Day ${day.day}</span>
+                    <span style="font-size:0.8rem; color:#888;">${d.is_light ? '🌱 清淡日' : '🥘 家常日'}</span>
+                </div>
+                
+                <div class="meal-row">
+                    <div class="meal-time">早/午</div>
+                    <div class="meal-content">
+                        <div style="font-size:0.9rem; margin-bottom:4px;"><strong>早：</strong>${day.meals.breakfast} <button class="regen-btn" style="float:right;" id="regen-${idx}-breakfast" onclick="regenerateMeal(${idx}, 'breakfast')">↺</button></div>
+                        <div style="font-size:0.9rem;"><strong>午：</strong>${day.meals.lunch} <button class="regen-btn" style="float:right;" id="regen-${idx}-lunch" onclick="regenerateMeal(${idx}, 'lunch')">↺</button></div>
+                    </div>
+                </div>
+
+                <div class="meal-row">
+                    <div class="meal-time">晚餐</div>
+                    <div class="meal-content dinner">
+                        <div class="dish-name">${d.main} + ${d.side}</div>
+                        <div class="dish-desc">湯：${d.soup}｜主食：${d.staple}</div>
+                        
+                        <div class="tags">
+                            ${d.prep ? `<span class="tag prep">⚠️ 備：${d.prep}</span>` : ''}
+                            <span class="tag">📝 廚：${d.method}</span>
+                        </div>
+
+                        <div class="action-bar">
+                            <button class="sparkle-btn" onclick="getSmartRecipe('${d.main}')">
+                                📖 食譜
+                            </button>
+                            <button class="regen-btn" id="regen-${idx}-dinner" onclick="regenerateMeal(${idx}, 'dinner')">
+                                ↺ 換一餐
+                            </button>
+                            <div class="feedback-btns">
+                                <button class="feedback-btn ${isLiked(d.main) ? 'active like' : ''}" onclick="toggleLike('${d.main}', 'like')">👍</button>
+                                <button class="feedback-btn ${isDisliked(d.main) ? 'active dislike' : ''}" onclick="toggleLike('${d.main}', 'dislike')">👎</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+        renderShoppingList();
+    }
+
+    function renderShoppingList() {
+        const container = document.getElementById('shopping-list-content');
+        const list = state.plan.shopping_list;
+        if (!list) return;
+
+        let html = '';
+        const map = { 'proteins': '🥩 魚肉類', 'veggies': '🥬 蔬菜類', 'others': '🧂 乾貨/其他' };
+        
+        for (let key in map) {
+            if (list[key] && list[key].length > 0) {
+                html += `<div class="shop-cat"><div class="shop-cat-title">${map[key]}</div>`;
+                list[key].forEach(item => {
+                    html += `<label class="shop-item"><input type="checkbox"><span>${item}</span></label>`;
+                });
+                html += `</div>`;
+            }
+        }
+        container.innerHTML = html;
+    }
+
+    // --- MODAL ---
+    function openModal(modalId, title, htmlContent) {
+        if(title) document.getElementById('modal-title').textContent = title;
+        if(htmlContent) document.getElementById('modal-body').innerHTML = htmlContent;
+        document.getElementById(modalId).classList.add('active');
+        document.body.style.overflow = 'hidden'; 
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
+        document.body.style.overflow = '';
+    }
+    
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
+
+    // --- PREFERENCES ---
+
+    function isLiked(dish) { return state.prefs.liked.includes(dish); }
+    function isDisliked(dish) { return state.prefs.disliked.includes(dish); }
+
+    function toggleLike(dish, type) {
+        if (type === 'like') {
+            if (isLiked(dish)) {
+                state.prefs.liked = state.prefs.liked.filter(i => i !== dish); 
+            } else {
+                state.prefs.liked.push(dish);
+                state.prefs.disliked = state.prefs.disliked.filter(i => i !== dish); 
+            }
+        } else {
+            if (isDisliked(dish)) {
+                state.prefs.disliked = state.prefs.disliked.filter(i => i !== dish); 
+            } else {
+                state.prefs.disliked.push(dish);
+                state.prefs.liked = state.prefs.liked.filter(i => i !== dish); 
+            }
+        }
+        localStorage.setItem('hkchef_prefs', JSON.stringify(state.prefs));
+        renderPlan(); 
+        renderPrefs();
+    }
+
+    function renderPrefs() {
+        const el = document.getElementById('pref-display');
+        let txt = '';
+        if (state.prefs.liked.length) txt += `<span style="color:var(--primary)">👍 ${state.prefs.liked.join(', ')}</span><br>`;
+        if (state.prefs.disliked.length) txt += `<span style="color:var(--danger)">👎 ${state.prefs.disliked.join(', ')}</span>`;
+        el.innerHTML = txt || '暫無記錄';
+    }
+
+    // --- TABS ---
+    function switchTab(id) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+        document.getElementById(`view-${id}`).classList.add('active');
+        document.getElementById(`nav-${id}`).classList.add('active');
+        window.scrollTo(0,0);
+    }
+</script>
+
+</body>
+</html>
