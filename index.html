@@ -231,6 +231,20 @@
         input:focus, textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px var(--primary-light); }
         textarea { height: 100px; resize: none; font-family: inherit; }
 
+        /* Checkbox styling */
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: normal;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            cursor: pointer;
+        }
+        .checkbox-label input { width: 20px; height: 20px; margin: 0; }
+
         /* Main Button */
         .btn-main {
             width: 100%;
@@ -302,7 +316,65 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Shopping List */
+        /* Shopping List & Filters */
+        .shop-filter-container {
+            margin-bottom: 20px;
+            background: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+        .filter-mode-btn {
+            border: 1px solid var(--primary);
+            background: none;
+            color: var(--primary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .filter-mode-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 8px;
+        }
+        .day-toggle {
+            background: #f5f5f5;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+        .day-toggle.active {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary-dark);
+        }
+        .day-toggle span.menu-name {
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
         .shop-cat { margin-top: 20px; }
         .shop-cat-title { 
             font-weight: 700; 
@@ -403,7 +475,20 @@
 <!-- 2. 購物清單頁面 -->
 <div id="view-shop" class="view">
     <div class="card">
-        <h2 style="margin-top:0;">🛒 每週購物清單</h2>
+        <h2 style="margin-top:0;">🛒 購買食材</h2>
+        
+        <!-- Filter Controls -->
+        <div id="shop-filters" class="shop-filter-container" style="display:none;">
+            <div class="filter-controls">
+                <button class="filter-mode-btn active" id="btn-filter-all" onclick="setFilterMode('all')">📅 整週全選</button>
+                <button class="filter-mode-btn" id="btn-filter-select" onclick="setFilterMode('select')">📝 自選餐單</button>
+            </div>
+            
+            <div id="day-toggles" class="filter-grid" style="display:none;">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
         <div id="shopping-list-content">
             <p style="color: #999; text-align: center; padding: 20px;">暫無資料，請先生成餐單。</p>
         </div>
@@ -439,10 +524,19 @@
 
     <div class="card">
         <h3>🏠 預設偏好 (Prompt)</h3>
-        <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">這裡的文字會告訴 AI 你的詳細要求。</p>
         
         <div class="input-group">
-            <label>餐單提示詞</label>
+            <label>餐單詳細度</label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="detailedMeals" onchange="saveSettings()">
+                <span>📝 生成詳細早午餐 (包括做法/備料)</span>
+            </label>
+            <small style="color:#666; margin-left:30px;">勾選後，AI 會提供早午餐的詳細做法及加入買餸清單。</small>
+        </div>
+
+        <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">AI 指令：</p>
+        
+        <div class="input-group">
             <textarea id="promptInput" onchange="saveSettings()"></textarea>
         </div>
 
@@ -527,8 +621,8 @@
     {
       "day": 1,
       "meals": {
-        "breakfast": "簡單描述",
-        "lunch": "簡單描述",
+        "breakfast": "簡單描述 或 {main, method, prep} 物件 (如用戶要求詳細)",
+        "lunch": "簡單描述 或 {main, method, prep} 物件 (如用戶要求詳細)",
         "dinner": {
            "main": "主菜名",
            "side": "副菜名",
@@ -538,32 +632,55 @@
            "method": "簡述做法與廚具",
            "prep": "需預先準備的步驟"
         }
+      },
+      "daily_shopping": {
+         "proteins": ["項目"],
+         "veggies": ["項目"],
+         "others": ["項目"]
       }
     }
-  ],
-  "shopping_list": {
-     "proteins": ["項目"],
-     "veggies": ["項目"],
-     "others": ["項目"]
-  }
+  ]
 }`;
 
-    // Dummy Data for immediate start
+    // Dummy Data for immediate start - Updated structure for daily filtering
     const DEFAULT_PLAN = {
         "days": [
-            { "day": 1, "meals": { "breakfast": "腿蛋治 + 咖啡", "lunch": "雲吞麵 (外賣/自煮)", "dinner": { "main": "清蒸海上鮮 (蒸魚)", "side": "蒜蓉炒菜心", "soup": "粟米紅蘿蔔豬骨湯", "staple": "白飯", "is_light": true, "method": "魚洗淨擦乾，水滾蒸8分鐘，淋熟油豉油。", "prep": "早上解凍豬骨" } } },
-            { "day": 2, "meals": { "breakfast": "皮蛋瘦肉粥", "lunch": "煎餃 + 菜", "dinner": { "main": "冬菇滑雞", "side": "清炒西蘭花", "soup": "昨晚湯水", "staple": "白飯", "is_light": true, "method": "雞醃30分鐘，隔水蒸15分鐘。", "prep": "冬菇浸軟" } } },
-            { "day": 3, "meals": { "breakfast": "腸粉 + 燒賣", "lunch": "揚州炒飯 (用昨晚冷飯)", "dinner": { "main": "洋蔥豬扒", "side": "魚香茄子", "soup": "番茄豆腐湯", "staple": "白飯", "is_light": false, "method": "豬扒煎香兩面，回鑊炒洋蔥汁。", "prep": "豬扒拍鬆醃味" } } },
-            { "day": 4, "meals": { "breakfast": "麥皮 + 水煮蛋", "lunch": "湯烏冬", "dinner": { "main": "勝瓜蒸肉碎", "side": "瑤柱蒸蛋", "soup": "紫菜蛋花湯", "staple": "糙米飯", "is_light": true, "method": "肉碎鋪勝瓜面蒸10分鐘。", "prep": "瑤柱浸軟" } } },
-            { "day": 5, "meals": { "breakfast": "火腿通粉", "lunch": "肉醬意粉", "dinner": { "main": "西芹炒雞柳", "side": "蝦仁炒蛋", "soup": "合掌瓜瘦肉湯", "staple": "白飯", "is_light": false, "method": "雞柳快炒保持嫩滑。", "prep": "蝦仁去腸" } } },
-            { "day": 6, "meals": { "breakfast": "餐蛋麵", "lunch": "簡單三文治", "dinner": { "main": "梅菜蒸鯇魚", "side": "上湯浸菠菜", "soup": "青紅蘿蔔豬腱湯", "staple": "白飯", "is_light": true, "method": "梅菜洗淨鋪魚面蒸。", "prep": "豬腱汆水" } } },
-            { "day": 7, "meals": { "breakfast": "去茶樓飲茶", "lunch": "飲茶點心", "dinner": { "main": "豉汁蒸排骨", "side": "老少平安 (豆腐鯪魚肉)", "soup": "昨晚湯水", "staple": "白飯", "is_light": false, "method": "排骨豆豉撈勻蒸15分鐘。", "prep": "排骨醃入味" } } }
-        ],
-        "shopping_list": {
-            "proteins": ["魚 (2條)", "雞 (半隻)", "豬扒 (3塊)", "免治豬肉 (300g)", "蝦仁 (200g)", "排骨 (300g)", "鯪魚肉 (150g)"],
-            "veggies": ["菜心", "西蘭花", "洋蔥", "茄子", "番茄", "勝瓜", "西芹", "菠菜", "青紅蘿蔔", "合掌瓜"],
-            "others": ["皮蛋", "冬菇", "瑤柱", "紫菜", "梅菜", "豆腐"]
-        }
+            { 
+                "day": 1, 
+                "meals": { "breakfast": "腿蛋治 + 咖啡", "lunch": "雲吞麵 (外賣/自煮)", "dinner": { "main": "清蒸海上鮮 (蒸魚)", "side": "蒜蓉炒菜心", "soup": "粟米紅蘿蔔豬骨湯", "staple": "白飯", "is_light": true, "method": "魚洗淨擦乾，水滾蒸8分鐘，淋熟油豉油。", "prep": "早上解凍豬骨" } },
+                "daily_shopping": { "proteins": ["魚 (1條)", "豬骨 (300g)"], "veggies": ["菜心", "粟米", "紅蘿蔔"], "others": ["薑", "蔥"] }
+            },
+            { 
+                "day": 2, 
+                "meals": { "breakfast": "皮蛋瘦肉粥", "lunch": "煎餃 + 菜", "dinner": { "main": "冬菇滑雞", "side": "清炒西蘭花", "soup": "昨晚湯水", "staple": "白飯", "is_light": true, "method": "雞醃30分鐘，隔水蒸15分鐘。", "prep": "冬菇浸軟" } },
+                "daily_shopping": { "proteins": ["雞 (半隻)", "瘦肉 (100g)"], "veggies": ["西蘭花"], "others": ["皮蛋", "冬菇", "餃子皮"] }
+            },
+            { 
+                "day": 3, 
+                "meals": { "breakfast": "腸粉 + 燒賣", "lunch": "揚州炒飯 (用昨晚冷飯)", "dinner": { "main": "洋蔥豬扒", "side": "魚香茄子", "soup": "番茄豆腐湯", "staple": "白飯", "is_light": false, "method": "豬扒煎香兩面，回鑊炒洋蔥汁。", "prep": "豬扒拍鬆醃味" } },
+                "daily_shopping": { "proteins": ["豬扒 (3塊)"], "veggies": ["洋蔥", "茄子", "番茄"], "others": ["豆腐", "燒賣(急凍)", "腸粉"] }
+            },
+            { 
+                "day": 4, 
+                "meals": { "breakfast": "麥皮 + 水煮蛋", "lunch": "湯烏冬", "dinner": { "main": "勝瓜蒸肉碎", "side": "瑤柱蒸蛋", "soup": "紫菜蛋花湯", "staple": "糙米飯", "is_light": true, "method": "肉碎鋪勝瓜面蒸10分鐘。", "prep": "瑤柱浸軟" } },
+                "daily_shopping": { "proteins": ["免治豬肉 (300g)", "雞蛋 (4隻)"], "veggies": ["勝瓜"], "others": ["瑤柱", "紫菜", "烏冬"] }
+            },
+            { 
+                "day": 5, 
+                "meals": { "breakfast": "火腿通粉", "lunch": "肉醬意粉", "dinner": { "main": "西芹炒雞柳", "side": "蝦仁炒蛋", "soup": "合掌瓜瘦肉湯", "staple": "白飯", "is_light": false, "method": "雞柳快炒保持嫩滑。", "prep": "蝦仁去腸" } },
+                "daily_shopping": { "proteins": ["雞柳 (200g)", "蝦仁 (200g)", "瘦肉 (200g)"], "veggies": ["西芹", "合掌瓜"], "others": ["通粉", "火腿", "意粉"] }
+            },
+            { 
+                "day": 6, 
+                "meals": { "breakfast": "餐蛋麵", "lunch": "簡單三文治", "dinner": { "main": "梅菜蒸鯇魚", "side": "上湯浸菠菜", "soup": "青紅蘿蔔豬腱湯", "staple": "白飯", "is_light": true, "method": "梅菜洗淨鋪魚面蒸。", "prep": "豬腱汆水" } },
+                "daily_shopping": { "proteins": ["鯇魚腩", "豬腱"], "veggies": ["菠菜", "青紅蘿蔔"], "others": ["梅菜", "午餐肉", "公仔麵"] }
+            },
+            { 
+                "day": 7, 
+                "meals": { "breakfast": "去茶樓飲茶", "lunch": "飲茶點心", "dinner": { "main": "豉汁蒸排骨", "side": "老少平安 (豆腐鯪魚肉)", "soup": "昨晚湯水", "staple": "白飯", "is_light": false, "method": "排骨豆豉撈勻蒸15分鐘。", "prep": "排骨醃入味" } },
+                "daily_shopping": { "proteins": ["排骨 (300g)", "鯪魚肉 (150g)"], "veggies": [], "others": ["豆腐", "豆豉"] }
+            }
+        ]
     };
 
     // State
@@ -571,7 +688,9 @@
         apiKey: '',
         prompt: DEFAULT_PROMPT,
         plan: null,
-        prefs: { liked: [], disliked: [] }
+        prefs: { liked: [], disliked: [] },
+        shopFilter: { mode: 'all', selectedDays: [] }, // 'all' or 'select'
+        detailedMeals: false // Toggle for detailed breakfast/lunch
     };
 
     // --- INIT ---
@@ -582,11 +701,10 @@
         // 1. 如果沒有儲存的餐單，載入預設餐單
         if (!state.plan) {
             state.plan = DEFAULT_PLAN;
-            // 不存入 LocalStorage，只作為臨時顯示，直到用戶生成新的
         }
 
         renderPlan();
-
+        
         // 2. 如果沒有 API Key，彈出歡迎 Modal
         if (!state.apiKey) {
             document.getElementById('welcome-modal').classList.add('active');
@@ -602,6 +720,7 @@
     function loadState() {
         state.apiKey = localStorage.getItem('hkchef_key') || '';
         state.prompt = localStorage.getItem('hkchef_prompt') || DEFAULT_PROMPT;
+        state.detailedMeals = localStorage.getItem('hkchef_detailed') === 'true'; // Load boolean
         const savedPlan = localStorage.getItem('hkchef_plan');
         if (savedPlan) state.plan = JSON.parse(savedPlan);
         const savedPrefs = localStorage.getItem('hkchef_prefs');
@@ -609,14 +728,23 @@
 
         document.getElementById('apiKey').value = state.apiKey;
         document.getElementById('promptInput').value = state.prompt;
+        document.getElementById('detailedMeals').checked = state.detailedMeals;
         updateStatus();
+        
+        // Initialize filters selectedDays if empty
+        if(state.plan && state.plan.days) {
+            state.shopFilter.selectedDays = state.plan.days.map((_, i) => i);
+        }
     }
 
     function saveSettings() {
         state.apiKey = document.getElementById('apiKey').value.trim();
         state.prompt = document.getElementById('promptInput').value.trim();
+        state.detailedMeals = document.getElementById('detailedMeals').checked;
+        
         localStorage.setItem('hkchef_key', state.apiKey);
         localStorage.setItem('hkchef_prompt', state.prompt);
+        localStorage.setItem('hkchef_detailed', state.detailedMeals);
         updateStatus();
     }
     
@@ -646,6 +774,7 @@
             prompt: state.prompt,
             plan: state.plan,
             prefs: state.prefs,
+            detailedMeals: state.detailedMeals,
             timestamp: new Date().toISOString()
         };
         const jsonStr = JSON.stringify(data);
@@ -677,6 +806,7 @@
             // Save to LocalStorage
             if (data.apiKey) localStorage.setItem('hkchef_key', data.apiKey);
             if (data.prompt) localStorage.setItem('hkchef_prompt', data.prompt);
+            if (data.detailedMeals !== undefined) localStorage.setItem('hkchef_detailed', data.detailedMeals);
             if (data.plan) localStorage.setItem('hkchef_plan', JSON.stringify(data.plan));
             if (data.prefs) localStorage.setItem('hkchef_prefs', JSON.stringify(data.prefs));
 
@@ -703,6 +833,18 @@
         document.getElementById('loading').style.display = 'flex';
 
         let finalPrompt = state.prompt;
+        
+        // Append Detailed Instruction if enabled
+        if (state.detailedMeals) {
+            finalPrompt += `\n\n[重要指令：詳細早午餐] 
+            請將 breakfast 和 lunch 也生成為詳細物件，格式如下：
+            "breakfast": { "main": "菜名", "method": "做法簡述", "prep": "備料" },
+            "lunch": { "main": "菜名", "method": "做法簡述", "prep": "備料" }
+            同時請確保早午餐的所需食材也加入到 daily_shopping 清單中。`;
+        } else {
+             finalPrompt += `\n\n[指令] breakfast 和 lunch 只需提供字串描述即可 (String)。`;
+        }
+
         if (state.prefs.liked.length > 0) {
             finalPrompt += `\n\n[用戶喜好] 請適量安排用戶喜歡的菜式：${state.prefs.liked.join(', ')}。`;
         }
@@ -716,6 +858,8 @@
             const json = cleanAndParseJSON(result);
             state.plan = json;
             localStorage.setItem('hkchef_plan', JSON.stringify(json));
+            // Reset filters to select all
+            state.shopFilter.selectedDays = json.days.map((_, i) => i);
             renderPlan();
         } catch (e) {
             alert('生成失敗：' + e.message);
@@ -739,7 +883,7 @@
         btn.disabled = true;
 
         const currentDinner = state.plan.days[dayIndex].meals.dinner;
-        let context = `請為第 ${dayIndex+1} 天的 ${type === 'dinner' ? '晚餐' : type} 重新建議一個菜式。`;
+        let context = `請為第 ${dayIndex+1} 天的 ${type === 'dinner' ? '晚餐' : getMealLabel(type)} 重新建議一個菜式。`;
         
         if (type === 'dinner') {
              context += `
@@ -750,7 +894,16 @@
              { "main": "...", "side": "...", "soup": "...", "staple": "...", "is_light": true/false, "method": "...", "prep": "..." }
              `;
         } else {
-             context += `要求簡單快捷。只回傳字串描述即可。`;
+             // For Breakfast/Lunch regeneration
+             if (state.detailedMeals) {
+                 context += `
+                 要求：詳細做法。
+                 回傳格式：只回傳該餐的 JSON 對象:
+                 { "main": "...", "method": "...", "prep": "..." }
+                 `;
+             } else {
+                 context += `要求簡單快捷。只回傳字串描述即可。`;
+             }
         }
 
         try {
@@ -760,7 +913,12 @@
                 const newMeal = cleanAndParseJSON(result);
                 state.plan.days[dayIndex].meals.dinner = newMeal;
             } else {
-                state.plan.days[dayIndex].meals[type] = result.replace(/"/g, ''); 
+                // If detailed, result is JSON, else string
+                if (state.detailedMeals) {
+                     state.plan.days[dayIndex].meals[type] = cleanAndParseJSON(result);
+                } else {
+                     state.plan.days[dayIndex].meals[type] = result.replace(/"/g, ''); 
+                }
             }
             
             localStorage.setItem('hkchef_plan', JSON.stringify(state.plan));
@@ -770,6 +928,12 @@
             btn.textContent = '重試';
             btn.disabled = false;
         }
+    }
+
+    function getMealLabel(type) {
+        if(type === 'breakfast') return '早餐';
+        if(type === 'lunch') return '午餐';
+        return type;
     }
 
     // --- NEW AI FEATURES ---
@@ -835,7 +999,7 @@
 
     async function callGemini(promptText) {
         // Updated to the latest supported model gemini-2.5-flash-preview-09-2025
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${state.apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${state.apiKey}`;
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -877,8 +1041,9 @@
                 <div class="meal-row">
                     <div class="meal-time">早/午</div>
                     <div class="meal-content">
-                        <div style="font-size:0.9rem; margin-bottom:4px;"><strong>早：</strong>${day.meals.breakfast} <button class="regen-btn" style="float:right;" id="regen-${idx}-breakfast" onclick="regenerateMeal(${idx}, 'breakfast')">↺</button></div>
-                        <div style="font-size:0.9rem;"><strong>午：</strong>${day.meals.lunch} <button class="regen-btn" style="float:right;" id="regen-${idx}-lunch" onclick="regenerateMeal(${idx}, 'lunch')">↺</button></div>
+                        ${renderSimpleOrDetailedMeal(idx, 'breakfast', day.meals.breakfast)}
+                        <hr style="border:0; border-top:1px dashed #eee; margin:8px 0;">
+                        ${renderSimpleOrDetailedMeal(idx, 'lunch', day.meals.lunch)}
                     </div>
                 </div>
 
@@ -911,15 +1076,141 @@
             container.appendChild(card);
         });
 
+        // Initialize shop filters if they don't match days
+        if (state.plan.days) {
+             renderShopFilters();
+        }
+        renderShoppingList();
+    }
+    
+    // Helper to render B/L based on type (string vs object)
+    function renderSimpleOrDetailedMeal(dayIdx, type, mealData) {
+        const label = type === 'breakfast' ? '早' : '午';
+        let content = '';
+        
+        if (typeof mealData === 'string') {
+            // Simple String Mode
+            content = `<strong>${label}：</strong>${mealData}`;
+        } else if (mealData && typeof mealData === 'object') {
+            // Detailed Object Mode
+            content = `
+                <div style="margin-bottom:2px;"><strong>${label}：</strong>${mealData.main}</div>
+                <div style="font-size:0.8rem; color:#666; margin-left:25px;">
+                    ${mealData.prep ? `<span style="background:#e3f2fd; padding:1px 4px; border-radius:3px;">備: ${mealData.prep}</span> ` : ''}
+                    <span>法: ${mealData.method}</span>
+                     <button class="sparkle-btn secondary" style="display:inline-flex; padding:1px 6px; font-size:0.7rem; margin-left:5px;" onclick="getSmartRecipe('${mealData.main}')">📖</button>
+                </div>
+            `;
+        }
+        
+        return `
+            <div style="font-size:0.9rem;">
+                ${content} 
+                <button class="regen-btn" style="float:right; margin-top:-20px;" id="regen-${dayIdx}-${type}" onclick="regenerateMeal(${dayIdx}, '${type}')">↺</button>
+            </div>
+        `;
+    }
+    
+    // --- SHOPPING FILTER LOGIC ---
+    
+    function setFilterMode(mode) {
+        state.shopFilter.mode = mode;
+        document.getElementById('btn-filter-all').classList.toggle('active', mode === 'all');
+        document.getElementById('btn-filter-select').classList.toggle('active', mode === 'select');
+        
+        document.getElementById('day-toggles').style.display = mode === 'select' ? 'grid' : 'none';
+        renderShoppingList();
+    }
+    
+    function renderShopFilters() {
+        const container = document.getElementById('day-toggles');
+        container.innerHTML = '';
+        if(!state.plan || !state.plan.days) return;
+        
+        state.plan.days.forEach((day, idx) => {
+            const btn = document.createElement('div');
+            btn.className = `day-toggle ${state.shopFilter.selectedDays.includes(idx) ? 'active' : ''}`;
+            btn.onclick = () => toggleDayFilter(idx, btn);
+            btn.innerHTML = `<span class="menu-name">Day ${day.day}</span><span style="font-size:0.75rem; color:#666;">${day.meals.dinner.main}</span>`;
+            container.appendChild(btn);
+        });
+    }
+    
+    function toggleDayFilter(idx, btnEl) {
+        if (state.shopFilter.selectedDays.includes(idx)) {
+            state.shopFilter.selectedDays = state.shopFilter.selectedDays.filter(i => i !== idx);
+            btnEl.classList.remove('active');
+        } else {
+            state.shopFilter.selectedDays.push(idx);
+            btnEl.classList.add('active');
+        }
         renderShoppingList();
     }
 
     function renderShoppingList() {
         const container = document.getElementById('shopping-list-content');
-        const list = state.plan.shopping_list;
-        if (!list) return;
+        const filterContainer = document.getElementById('shop-filters');
+        
+        if (!state.plan) {
+             container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暫無資料，請先生成餐單。</p>';
+             return;
+        }
+        
+        // COMPATIBILITY CHECK
+        // If data is old format (global shopping list), hide filters and show basic list
+        if (state.plan.shopping_list && !state.plan.days[0].daily_shopping) {
+            filterContainer.style.display = 'none';
+            renderGlobalShoppingList(state.plan.shopping_list);
+            return;
+        }
 
+        // New Format: Per-Day shopping lists
+        filterContainer.style.display = 'block';
+        
+        // Aggregate items
+        const aggregated = { proteins: new Set(), veggies: new Set(), others: new Set() };
+        
+        // Determine indices to use
+        const indices = state.shopFilter.mode === 'all' 
+            ? state.plan.days.map((_, i) => i) 
+            : state.shopFilter.selectedDays;
+            
+        indices.forEach(idx => {
+            const daily = state.plan.days[idx].daily_shopping;
+            if(daily) {
+                if(daily.proteins) daily.proteins.forEach(i => aggregated.proteins.add(i));
+                if(daily.veggies) daily.veggies.forEach(i => aggregated.veggies.add(i));
+                if(daily.others) daily.others.forEach(i => aggregated.others.add(i));
+            }
+        });
+        
         let html = '';
+        const map = { 'proteins': '🥩 魚肉類', 'veggies': '🥬 蔬菜類', 'others': '🧂 乾貨/其他' };
+        let hasItems = false;
+        
+        for (let key in map) {
+            if (aggregated[key].size > 0) {
+                hasItems = true;
+                html += `<div class="shop-cat"><div class="shop-cat-title">${map[key]}</div>`;
+                aggregated[key].forEach(item => {
+                    html += `<label class="shop-item"><input type="checkbox"><span>${item}</span></label>`;
+                });
+                html += `</div>`;
+            }
+        }
+        
+        if(!hasItems) {
+            html = '<p style="text-align:center; color:#999; padding:20px;">沒有選擇任何餐單，或餐單沒有食材資料。</p>';
+        }
+        
+        container.innerHTML = html;
+        
+        // Restore check state? (Advanced feature, skipping for now as filtering resets view context usually)
+    }
+    
+    function renderGlobalShoppingList(list) {
+        const container = document.getElementById('shopping-list-content');
+        let html = '<div style="background:#fff3e0; color:#e65100; padding:10px; font-size:0.8rem; border-radius:8px; margin-bottom:15px;">⚠️ 此為舊版餐單資料，不支援「自選餐單」篩選。請重新生成以啟用新功能。</div>';
         const map = { 'proteins': '🥩 魚肉類', 'veggies': '🥬 蔬菜類', 'others': '🧂 乾貨/其他' };
         
         for (let key in map) {
